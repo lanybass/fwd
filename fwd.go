@@ -4,13 +4,22 @@ import (
 	"fmt"
 	"github.com/fatih/color"
 	"github.com/urfave/cli"
+	"io"
 	"net"
 	"os"
-	"io"
 	"os/signal"
-	"syscall"
 	"runtime"
+	"syscall"
+	"time"
 )
+var sigs chan os.Signal
+
+func dialTcpTimeout(proto, laddr, raddr string, timeout time.Duration) (net.Conn, error) {
+	localaddr, err := net.ResolveTCPAddr(proto, laddr);
+	errHandler(err)
+	d := net.Dialer{Timeout: timeout, LocalAddr: localaddr}
+	return d.Dial(proto, raddr)
+}
 
 func getLocalAddrs() ([]net.IP, error) {
 	addrs, err := net.InterfaceAddrs()
@@ -27,9 +36,14 @@ func getLocalAddrs() ([]net.IP, error) {
 	return list, nil
 }
 
-func fwd(src net.Conn, remote string, proto string) {
-	dst, err := net.Dial(proto, remote)
-	errHandler(err)
+func fwd(src net.Conn, remote string, proto string, cliAddr string, connTimeout int) {
+	//dst, err := net.Dial(proto, remote)
+	dst, err := dialTcpTimeout(proto, cliAddr, remote, time.Second * time.Duration(connTimeout))
+	if err != nil {
+		errPrinter(err)
+		src.Close()
+		return
+	}
 	go func() {
 		_, err = io.Copy(src, dst)
 		errPrinter(err)
@@ -58,7 +72,7 @@ func errPrinter(err error) {
 	}
 }
 
-func tcpStart(from string, to string) {
+func tcpStart(from string, to string,cliAddr string, connTimeout int) {
 	proto := "tcp"
 
 	localAddress, err := net.ResolveTCPAddr(proto, from)
@@ -82,7 +96,7 @@ func tcpStart(from string, to string) {
 		src, err := listener.Accept()
 		errHandler(err)
 		fmt.Printf("New connection established from '%v'\n", src.RemoteAddr())
-		go fwd(src, to, proto)
+		go fwd(src, to, proto, cliAddr, connTimeout)
 	}
 }
 
@@ -122,7 +136,6 @@ func udpStart(from string, to string) {
 }
 
 func ctrlc() {
-	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 	go func() {
 		sig := <-sigs
@@ -133,7 +146,7 @@ func ctrlc() {
 	}()
 }
 
-func main() {
+func RunProxy() (err error){
 	app := cli.NewApp()
 	app.Name = "fwd"
 	app.Version = "1.0.0"
@@ -158,6 +171,16 @@ func main() {
 			EnvVar: "FWD_TO",
 			Usage:  "destination HOST:PORT",
 		},
+		cli.StringFlag{
+			Name:   "cli_addr, ca",
+			EnvVar: "CLI_ADDR",
+			Usage:  "client addr HOST:PORT",
+		},
+		cli.IntFlag{
+			Name:   "conn_timeout, ct",
+			EnvVar: "CONN_TIMEOUT",
+			Usage:  "conn timeout seconds",
+		},
 		cli.BoolFlag{
 			Name:  "list, l",
 			Usage: "list local addresses",
@@ -171,6 +194,7 @@ func main() {
 			Usage: "build information",
 		},
 	}
+	sigs = make(chan os.Signal, 1)
 	app.Action = func(c *cli.Context) error {
 		defer color.Unset()
 		color.Set(color.FgGreen)
@@ -198,10 +222,10 @@ func main() {
 				udpStart(c.String("from"), c.String("to"))
 
 			} else {
-				tcpStart(c.String("from"), c.String("to"))
+				tcpStart(c.String("from"), c.String("to"), c.String("cli_addr"), c.Int("conn_timeout"))
 			}
 			return nil
 		}
 	}
-	app.Run(os.Args)
+	return app.Run(os.Args)
 }
