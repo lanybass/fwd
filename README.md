@@ -1,3 +1,7 @@
+# forker add:
+  * wrapped with windows service  
+  * add config.ini
+
 Table of Contents
 =================
 
