@@ -1,6 +1,7 @@
 # forker add:
   * wrapped with windows service  
   * add config.ini
+  * connect to dst server with specified IP and port
 
 Table of Contents
 =================
