@@ -4,7 +4,6 @@ import (
 	"./config"
 	"flag"
 	"github.com/kardianos/service"
-	"github.com/lanybass/gencode/utils"
 	"log"
 	"os"
 	"path/filepath"
@@ -82,8 +81,8 @@ func main() {
 			Name:             "zjjfwd",
 			DisplayName:      "yunwang proxy zjj",
 			Description:      "port forward for pda",
-			WorkingDirectory: utils.CurExePath,
-			ChRoot:           utils.CurExePath,
+			WorkingDirectory: CurExePath,
+			ChRoot:           CurExePath,
 		}}
 
 	sys := service.ChosenSystem()
